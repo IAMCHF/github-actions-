@@ -1,0 +1,37 @@
+name: Build Bolt.diy Docker TAR
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build-tar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (linux/amd64) and export as docker-archive tar
+        run: |
+          IMAGE_NAME=bolt.diy
+          TAG=${{ github.sha }}
+          docker buildx build \
+            --platform linux/amd64 \
+            --target bolt-ai-development \
+            -t ${IMAGE_NAME}:${TAG} \
+            --output type=docker,dest=bolt_diy_${TAG}.tar \
+            .
+
+      - name: Upload TAR as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bolt_diy_${{ github.sha }}.tar
+          path: bolt_diy_${{ github.sha }}.tar
+          if-no-files-found: error
