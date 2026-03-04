@@ -1,0 +1,53 @@
+name: Save Docker Image with agent-browser
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Base Docker image to pull and customize (e.g., agentscope/copaw:latest)'
+        required: true
+        default: 'agentscope/copaw:latest'
+
+jobs:
+  customize-and-save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pull base image
+        run: docker pull ${{ github.event.inputs.image }}
+
+      - name: Customize image (install node, npm, agent-browser)
+        run: |
+          # 创建一个临时容器，并在其中执行安装命令
+          # 注意：以下脚本假设基础镜像基于 Debian/Ubuntu，若不同请自行调整
+          CONTAINER_NAME="temp-customize-container"
+          docker run --name $CONTAINER_NAME ${{ github.event.inputs.image }} /bin/bash -c "
+            set -e
+            echo '=== 更新包列表 ==='
+            apt-get update
+            echo '=== 安装基础工具 (curl, git, ca-certificates) ==='
+            apt-get install -y curl ca-certificates git
+            echo '=== 添加 NodeSource 仓库 (Node.js 22) ==='
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+            echo '=== 安装 Node.js 和 npm ==='
+            apt-get install -y nodejs
+            echo '=== 全局安装 agent-browser ==='
+            npm install -g agent-browser
+            echo '=== 运行 agent-browser install --with-deps ==='
+            agent-browser install --with-deps
+            echo '=== 验证安装 ==='
+            agent-browser --version
+          "
+          # 容器执行完上述命令后会退出，但文件系统变更已保存
+          echo "=== 将容器提交为新镜像 ==="
+          docker commit $CONTAINER_NAME customized-image:latest
+          docker rm $CONTAINER_NAME
+
+      - name: Save customized image as artifact
+        run: docker save customized-image:latest | gzip > image.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-with-agent-browser
+          path: image.tar.gz
+          retention-days: 7
