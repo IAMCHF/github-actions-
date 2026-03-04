@@ -1,0 +1,35 @@
+name: Save Docker Image as Artifact
+
+on:
+  # 允许手动触发工作流，并可指定镜像名称（默认 agentscope/copaw:latest）
+  workflow_dispatch:
+    inputs:
+      image:
+        description: 'Docker image to pull and save (e.g., agentscope/copaw:latest)'
+        required: true
+        default: 'agentscope/copaw:latest'
+
+jobs:
+  save-image:
+    runs-on: ubuntu-latest
+    steps:
+      # 如果需要登录私有仓库，可取消下面注释并配置 Secrets
+      # - name: Log in to Docker Hub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKER_USERNAME }}
+      #     password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Pull and compress Docker image
+        run: |
+          echo "Pulling image: ${{ github.event.inputs.image }}"
+          docker pull ${{ github.event.inputs.image }}
+          echo "Saving and compressing image..."
+          docker save ${{ github.event.inputs.image }} | gzip > image.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image
+          path: image.tar.gz
+          retention-days: 7   # 保留 7 天，可根据需要调整
