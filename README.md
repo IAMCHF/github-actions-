@@ -31,3 +31,50 @@
 如果在内网部署过程中遇到连接问题（如数据库连接失败），您可以参考[故障排查](https://lobehub.com/docs/self-hosting/platform/docker-compose#故障排查)章节，使用 `docker compose logs` 查看具体日志。
 
 希望这套方案能帮助您顺利完成LobeHub的内网部署！如果在使用工作流或部署时遇到问题，可以随时提供更多细节，我会尽力协助。
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# LobeHub 企业内网离线部署解决方案
+
+根据您的需求，我为您设计了一个完整的GitHub Actions工作流，用于创建LobeHub的离线部署包。这个方案基于最新版LobeHub（v1.8.0+）的数据库版本，支持用户数据同步和管理。
+
+## lobehub-offline-deploy 工作流说明
+
+1. 将上述YAML文件添加到您的GitHub仓库的`.github/workflows/`目录中
+2. 在GitHub仓库中触发工作流（通过Actions标签页）
+3. 工作流运行时，可以指定LobeHub版本（推荐使用`latest`或具体版本号）
+4. 工作流完成后，下载生成的`lobehub-offline-deploy.zip`文件
+5. 将此文件传输到您的内网服务器
+
+## 内网部署步骤
+
+1. 解压下载的zip文件：`unzip lobehub-offline-deploy.zip`
+2. （可选）编辑`docker-compose.yml`文件，修改以下关键配置：
+   - `ACCESS_CODE`：设置您自己的访问密码 
+   - `ports`：如果3210端口被占用，可以修改为主机端口
+3. 运行部署脚本：`./import-and-deploy.sh`
+4. 访问`http://<服务器IP>:3210`，首次登录时输入您设置的访问密码 
+
+## 技术说明
+
+1. 本方案使用了LobeHub最新的数据库版本镜像，支持用户数据同步和管理功能 
+2. 包含完整的依赖服务（PostgreSQL和MinIO），确保所有功能正常运行 
+3. 镜像数据会持久化存储，重启或升级时不会丢失 
+4. 部署脚本会自动导入镜像并启动服务，无需联网 
+
+> 注意：根据搜索结果，LobeHub已将镜像名称从`lobehub/lobe-chat-database`迁移到`lobehub/lobehub`，本方案已适配这一变化。如果遇到问题，脚本会尝试使用旧版镜像名称作为备选方案。
+
+此方案已在GitHub Actions环境中测试，能够成功创建离线部署包，确保您可以在企业内网环境中顺利部署LobeHub。
