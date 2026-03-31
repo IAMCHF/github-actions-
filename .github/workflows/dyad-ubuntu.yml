@@ -2,46 +2,46 @@ name: Build Dyad for ubuntu22.04
 
 on:
   workflow_dispatch:          # 手动触发，方便控制
+  push:
+    branches: [ main ]        # 可选：自动更新离线包
 
 jobs:
   build-offline:
-    runs-on: ubuntu-22.04    # 与内网环境操作系统一致
-
+    runs-on: ubuntu-22.04     # 与容器 OS 一致
     steps:
-      - name: Checkout dyad repository
+      - name: Checkout dyad project
         uses: actions/checkout@v4
         with:
-          repository: dyad-sh/dyad   # 直接拉取 dyad 项目
-          # 如果需要特定分支或 tag，可以添加 ref 参数，例如：
-          ref: main
+          repository: dyad-sh/dyad
+          path: dyad
 
-      - name: Setup Node.js (exact version for offline machine)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.14.1'   # 与内网机器 Node 版本完全一致
-          cache: 'npm'              # 可选，加速后续 install
+          node-version: '24.14.1'
+          cache: 'npm'        # 自动缓存 ~/.npm，但为了完整打包仍会额外打包
+          cache-dependency-path: dyad/package-lock.json
 
-      - name: Install system build tools (required by node-gyp)
+      - name: Install dependencies (full)
+        working-directory: ./dyad
+        run: npm ci            # 使用 lock 文件保证版本一致性，若无 lock 则用 npm install
+
+      - name: Pack node_modules and npm cache
+        working-directory: ./dyad
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential python3
+          # 打包 node_modules（保留符号链接，适合原生模块）
+          tar -czf ../dyad_node_modules.tar.gz node_modules/
+          # 打包 npm 全局缓存（包含所有已下载的 tarball）
+          tar -czf ../npm_cache.tar.gz -C ~ .npm
+          # 额外打包整个项目（可选，方便还原）
+          tar -czf ../dyad_project_source.tar.gz --exclude=node_modules --exclude=.git .
 
-      - name: Install npm dependencies
-        run: npm install
-        # 若项目有 .npmrc 或需要特殊配置，请在此处调整
-
-      - name: Package entire project with node_modules
-        run: |
-          # 生成离线包，排除不必要的缓存和 git 信息
-          tar -czf dyad-offline.tar.gz \
-            --exclude='.git' \
-            --exclude='node_modules/.cache' \
-            --exclude='*.log' \
-            .
-
-      - name: Upload artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dyad-offline-package
-          path: dyad-offline.tar.gz
-          if-no-files-found: error
+          name: dyad-offline-packages
+          path: |
+            dyad_node_modules.tar.gz
+            npm_cache.tar.gz
+            dyad_project_source.tar.gz
+          retention-days: 7
