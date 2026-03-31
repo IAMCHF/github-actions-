@@ -1,4 +1,4 @@
-name: Build Dyda for ubuntu20.04
+name: Build Dyad for ubuntu20.04
 
 on:
   workflow_dispatch:          # 手动触发，方便控制
