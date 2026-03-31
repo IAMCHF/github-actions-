@@ -1,4 +1,4 @@
-name: Build Offline Package for dyad
+name: Build ubuntu20.04 Offline Package for dyad
 
 on:
   workflow_dispatch:          # 手动触发，方便控制
