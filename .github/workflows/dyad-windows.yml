@@ -38,7 +38,7 @@ jobs:
         run: npm install
 
       - name: Run npm start (to trigger all downloads and compilations)
-        run: npm start -- --no-sandbox   # 添加 --no-sandbox 避免在 Actions 沙箱中启动 Electron 失败
+        run: npx electron-forge start -- --no-sandbox   # 添加 --no-sandbox 避免在 Actions 沙箱中启动 Electron 失败
         # 如果 npm start 会长时间运行，可以设置超时或使用 start 命令后立即退出，但这里简单执行即可
         # 某些 Electron 应用可能需要额外参数来避免 GUI 交互
 
