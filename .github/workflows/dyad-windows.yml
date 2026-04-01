@@ -1,74 +1,63 @@
-name: Build Dyad for Windows
+name: Build Dyad for windows
 
 on:
-  workflow_dispatch:          # 手动触发
-
-env:
-  ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache   # 自定义 Electron 缓存目录
-  npm_config_cache: ${{ github.workspace }}/.npm-cache      # 自定义 npm 缓存目录
+  workflow_dispatch:          # 手动触发，便于控制
 
 jobs:
   build:
-    runs-on: windows-2022      # 与内网环境保持一致（Windows 10/11 均可）
-
+    runs-on: windows-2022   # 确保与目标环境一致（Windows）
     steps:
-      - name: Checkout dyad
+      - name: Checkout dyad repository
         uses: actions/checkout@v4
         with:
-          repository: dyad-sh/dyad
-          ref: v0.41.0             # 可改为特定 tag 或分支
+          repository: dyad-sh/dyad   # 如果 workflow 放在自己的仓库，需指定外部仓库
+          # 如果当前仓库就是 dyad 的 fork，可以去掉 repository 行
 
-      - name: Setup Node.js
+      - name: Setup Node.js (matching target version)
         uses: actions/setup-node@v4
         with:
-          node-version: '24.4.1'   # 与内网 Node 版本一致
+          node-version: '24.4.1'    # 与内网机器 Node 版本一致
 
-      # 缓存 npm 依赖和 Electron 头文件，加速后续构建
-      - name: Cache npm and Electron
-        uses: actions/cache@v3
-        id: cache-deps
-        with:
-          path: |
-            ${{ env.ELECTRON_CACHE }}
-            ${{ env.npm_config_cache }}
-            node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
+      - name: Configure cache directories (inside project)
+        shell: pwsh
+        run: |
+          # 在项目根目录下创建 .cache 文件夹用于存放所有缓存
+          New-Item -ItemType Directory -Force -Path .cache\npm
+          New-Item -ItemType Directory -Force -Path .cache\node-gyp
+          New-Item -ItemType Directory -Force -Path .cache\electron
+          New-Item -ItemType Directory -Force -Path .cache\electron-builder
 
-      # 如果缓存未命中，则正常安装依赖
+          # 设置环境变量，使后续命令使用这些缓存目录
+          echo "NPM_CONFIG_CACHE=$(Resolve-Path .cache\npm)" >> $env:GITHUB_ENV
+          echo "npm_config_cache=$(Resolve-Path .cache\npm)" >> $env:GITHUB_ENV   # 兼容某些工具
+          echo "NODE_GYP_CACHE=$(Resolve-Path .cache\node-gyp)" >> $env:GITHUB_ENV
+          echo "ELECTRON_CACHE=$(Resolve-Path .cache\electron)" >> $env:GITHUB_ENV
+          echo "ELECTRON_BUILDER_CACHE=$(Resolve-Path .cache\electron-builder)" >> $env:GITHUB_ENV
+
       - name: Install dependencies
-        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: npm install
-          # 可选：设置 npm 镜像源（如内网有镜像）
-          # npm_config_registry: https://registry.npmmirror.com
 
-      # 即使缓存命中，也要确保原生模块已针对当前环境编译（electron-rebuild 会检查）
-      - name: Rebuild native modules for Electron
-        run: |
-          npm install --save-dev @electron/rebuild
-          .\node_modules\.bin\electron-rebuild.cmd
-        env:
-          # 确保使用正确的 Electron 版本（自动从 package.json 读取）
-          ELECTRON_CACHE: ${{ env.ELECTRON_CACHE }}
+      - name: Run npm start (to trigger all downloads and compilations)
+        run: npm start -- --no-sandbox   # 添加 --no-sandbox 避免在 Actions 沙箱中启动 Electron 失败
+        # 如果 npm start 会长时间运行，可以设置超时或使用 start 命令后立即退出，但这里简单执行即可
+        # 某些 Electron 应用可能需要额外参数来避免 GUI 交互
 
-      # 打包整个项目（避免直接压缩时文件被占用，先复制到临时目录）
-      - name: Prepare package directory
+      - name: Prepare archive
+        shell: pwsh
         run: |
-          mkdir temp_package
-          # 使用 robocopy 复制，忽略一些不必要的文件/目录
-          robocopy . temp_package /E /XD .git .github .vscode temp_package node_modules/.cache /XF *.log *.lock
-          # 确保 node_modules 完整复制（robocopy 已包含）
-          # 复制完成后，切换到临时目录打包
-
-      - name: Create tar.gz archive
-        run: |
-          cd temp_package
-          tar -czf ../dyad-windows.tar.gz .
-          cd ..
+          # 将项目所有文件（包括 node_modules 和 .cache）打包
+          # 注意排除 .git 目录以减少体积
+          $exclude = @('*.git', '*.github')   # 可根据需要调整
+          $source = '.'
+          $destination = 'dyad-offline-bundle.tar.gz'
+          # 使用 tar 打包（Windows 10 1803+ 自带 tar 命令）
+          tar -czf $destination --exclude='.git' --exclude='.github' --exclude='*.tar.gz' $source
+          # 验证文件大小
+          Get-Item $destination | Select-Object Name, Length
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dyad-windows
-          path: dyad-windows.tar.gz
+          name: dyad-offline-bundle
+          path: dyad-offline-bundle.tar.gz
+          retention-days: 7   # 根据需要保留
