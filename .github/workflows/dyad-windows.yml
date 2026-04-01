@@ -40,7 +40,6 @@ jobs:
       - name: Install dependencies
         if: steps.cache-deps.outputs.cache-hit != 'true'
         run: npm install
-        env:
           # 可选：设置 npm 镜像源（如内网有镜像）
           # npm_config_registry: https://registry.npmmirror.com
 
