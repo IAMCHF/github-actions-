@@ -1,29 +1,72 @@
 name: Build Dyad for Windows
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:          # 手动触发
+
+env:
+  ELECTRON_CACHE: ${{ github.workspace }}/.electron-cache   # 自定义 Electron 缓存目录
+  npm_config_cache: ${{ github.workspace }}/.npm-cache      # 自定义 npm 缓存目录
 
 jobs:
   build:
-    runs-on: windows-2022
+    runs-on: windows-2022      # 与内网环境保持一致（Windows 10/11 均可）
+
     steps:
       - name: Checkout dyad
         uses: actions/checkout@v4
         with:
           repository: dyad-sh/dyad
-          ref: main
+          ref: v0.41.0             # 可改为特定 tag 或分支
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24.4.1'
+          node-version: '24.4.1'   # 与内网 Node 版本一致
 
+      # 缓存 npm 依赖和 Electron 头文件，加速后续构建
+      - name: Cache npm and Electron
+        uses: actions/cache@v3
+        id: cache-deps
+        with:
+          path: |
+            ${{ env.ELECTRON_CACHE }}
+            ${{ env.npm_config_cache }}
+            node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      # 如果缓存未命中，则正常安装依赖
       - name: Install dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
         run: npm install
+        env:
+          # 可选：设置 npm 镜像源（如内网有镜像）
+          # npm_config_registry: https://registry.npmmirror.com
 
-      - name: Package with tar
+      # 即使缓存命中，也要确保原生模块已针对当前环境编译（electron-rebuild 会检查）
+      - name: Rebuild native modules for Electron
         run: |
-          tar -czf dyad-windows.tar.gz --exclude=dyad-windows.tar.gz .
+          npm install --save-dev @electron/rebuild
+          .\node_modules\.bin\electron-rebuild.cmd
+        env:
+          # 确保使用正确的 Electron 版本（自动从 package.json 读取）
+          ELECTRON_CACHE: ${{ env.ELECTRON_CACHE }}
+
+      # 打包整个项目（避免直接压缩时文件被占用，先复制到临时目录）
+      - name: Prepare package directory
+        run: |
+          mkdir temp_package
+          # 使用 robocopy 复制，忽略一些不必要的文件/目录
+          robocopy . temp_package /E /XD .git .github .vscode temp_package node_modules/.cache /XF *.log *.lock
+          # 确保 node_modules 完整复制（robocopy 已包含）
+          # 复制完成后，切换到临时目录打包
+
+      - name: Create tar.gz archive
+        run: |
+          cd temp_package
+          tar -czf ../dyad-windows.tar.gz .
+          cd ..
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
