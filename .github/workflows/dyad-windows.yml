@@ -11,6 +11,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dyad-sh/dyad   # 如果 workflow 放在自己的仓库，需指定外部仓库
+          ref: 'v0.41.0'                # 指定 tag，例如 'v0.1.0' 或具体版本号
           # 如果当前仓库就是 dyad 的 fork，可以去掉 repository 行
 
       - name: Setup Node.js (matching target version)
@@ -37,10 +38,24 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run npm start (to trigger all downloads and compilations)
-        run: npx electron-forge start -- --no-sandbox   # 添加 --no-sandbox 避免在 Actions 沙箱中启动 Electron 失败
-        # 如果 npm start 会长时间运行，可以设置超时或使用 start 命令后立即退出，但这里简单执行即可
-        # 某些 Electron 应用可能需要额外参数来避免 GUI 交互
+      - name: Run npm start (limited to 60 seconds)
+        shell: pwsh
+        run: |
+          # 启动 npm start 进程（实际使用 npx electron-forge start）
+          Write-Host "Starting electron-forge..."
+          $process = Start-Process -FilePath "npx" -ArgumentList "electron-forge start -- --no-sandbox" -NoNewWindow -PassThru
+          
+          Write-Host "Waiting 60 seconds for downloads and compilations..."
+          Start-Sleep -Seconds 60
+          
+          # 终止进程及其所有子进程（避免残留）
+          Write-Host "Stopping the process tree..."
+          Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          
+          # 可选：额外清理可能遗留的 node 进程
+          Get-Process -Name "node","electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          
+          Write-Host "Execution stopped after 60 seconds."
 
       - name: Prepare archive
         shell: pwsh
