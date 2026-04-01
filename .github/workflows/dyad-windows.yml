@@ -41,18 +41,18 @@ jobs:
       - name: Run npm start (limited to 60 seconds)
         shell: pwsh
         run: |
-          # 启动 npm start 进程（实际使用 npx electron-forge start）
-          Write-Host "Starting electron-forge..."
-          $process = Start-Process -FilePath "npx" -ArgumentList "electron-forge start -- --no-sandbox" -NoNewWindow -PassThru
+          # 使用 cmd /c 调用 npm start，确保可执行
+          Write-Host "Starting electron-forge via npm start..."
+          $process = Start-Process -FilePath "cmd" -ArgumentList "/c npm start -- --no-sandbox" -NoNewWindow -PassThru
           
           Write-Host "Waiting 60 seconds for downloads and compilations..."
           Start-Sleep -Seconds 60
           
-          # 终止进程及其所有子进程（避免残留）
+          # 终止主进程及其所有子进程
           Write-Host "Stopping the process tree..."
           Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
           
-          # 可选：额外清理可能遗留的 node 进程
+          # 额外清理可能遗留的 node 或 electron 进程（避免文件锁定）
           Get-Process -Name "node","electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
           
           Write-Host "Execution stopped after 60 seconds."
