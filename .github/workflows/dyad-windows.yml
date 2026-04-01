@@ -38,15 +38,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run npm start (limited to 60 seconds)
+      - name: Run npm start (limited to 90 seconds)
         shell: pwsh
         run: |
           # 使用 cmd /c 调用 npm start，确保可执行
           Write-Host "Starting electron-forge via npm start..."
           $process = Start-Process -FilePath "cmd" -ArgumentList "/c npm start" -NoNewWindow -PassThru
           
-          Write-Host "Waiting 60 seconds for downloads and compilations..."
-          Start-Sleep -Seconds 60
+          Write-Host "Waiting 90 seconds for downloads and compilations..."
+          Start-Sleep -Seconds 90
           
           # 终止主进程及其所有子进程
           Write-Host "Stopping the process tree..."
