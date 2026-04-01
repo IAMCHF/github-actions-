@@ -43,7 +43,7 @@ jobs:
         run: |
           # 使用 cmd /c 调用 npm start，确保可执行
           Write-Host "Starting electron-forge via npm start..."
-          $process = Start-Process -FilePath "cmd" -ArgumentList "/c npm start -- --no-sandbox" -NoNewWindow -PassThru
+          $process = Start-Process -FilePath "cmd" -ArgumentList "/c npm start" -NoNewWindow -PassThru
           
           Write-Host "Waiting 60 seconds for downloads and compilations..."
           Start-Sleep -Seconds 60
