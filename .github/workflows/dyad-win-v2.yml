@@ -1,27 +1,28 @@
 name: Build Dyad for windows
 
 on:
-  workflow_dispatch:          # 手动触发
+  workflow_dispatch:          # 手动触发，便于控制
 
 jobs:
   build:
-    runs-on: windows-2022     # 与目标环境一致
+    runs-on: windows-2022   # 确保与目标环境一致（Windows）
     steps:
       - name: Checkout dyad repository
         uses: actions/checkout@v4
         with:
-          repository: dyad-sh/dyad   # 指定上游仓库
-          ref: 'v0.41.0'             # 固定版本
+          repository: dyad-sh/dyad   # 如果 workflow 放在自己的仓库，需指定外部仓库
+          ref: 'v0.41.0'                # 指定 tag，例如 'v0.1.0' 或具体版本号
+          # 如果当前仓库就是 dyad 的 fork，可以去掉 repository 行
 
       - name: Setup Node.js (matching target version)
         uses: actions/setup-node@v4
         with:
-          node-version: '24.4.1'     # 与内网机器 Node 版本一致
+          node-version: '24.4.1'    # 与内网机器 Node 版本一致
 
       - name: Configure cache directories (inside project)
         shell: pwsh
         run: |
-          # 在项目根目录下创建 .cache 子目录用于存放各类缓存
+          # 在项目根目录下创建 .cache 文件夹用于存放所有缓存
           New-Item -ItemType Directory -Force -Path .cache\npm
           New-Item -ItemType Directory -Force -Path .cache\node-gyp
           New-Item -ItemType Directory -Force -Path .cache\electron
@@ -29,7 +30,7 @@ jobs:
 
           # 设置环境变量，使后续命令使用这些缓存目录
           echo "NPM_CONFIG_CACHE=$(Resolve-Path .cache\npm)" >> $env:GITHUB_ENV
-          echo "npm_config_cache=$(Resolve-Path .cache\npm)" >> $env:GITHUB_ENV
+          echo "npm_config_cache=$(Resolve-Path .cache\npm)" >> $env:GITHUB_ENV   # 兼容某些工具
           echo "NODE_GYP_CACHE=$(Resolve-Path .cache\node-gyp)" >> $env:GITHUB_ENV
           echo "ELECTRON_CACHE=$(Resolve-Path .cache\electron)" >> $env:GITHUB_ENV
           echo "ELECTRON_BUILDER_CACHE=$(Resolve-Path .cache\electron-builder)" >> $env:GITHUB_ENV
@@ -37,15 +38,44 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run npm run make (full build to cache all dependencies)
-        run: npm run make   # 执行完整的构建命令，所有外网依赖将被下载并存放在 .cache 和 node_modules 中
+      # ========== 保留原有 npm start 步骤（完全未修改） ==========
+      - name: Run npm start (limited to 90 seconds)
+        shell: pwsh
+        run: |
+          # 使用 cmd /c 调用 npm start，确保可执行
+          Write-Host "Starting electron-forge via npm start..."
+          $process = Start-Process -FilePath "cmd" -ArgumentList "/c npm start" -NoNewWindow -PassThru
+          
+          Write-Host "Waiting 90 seconds for downloads and compilations..."
+          Start-Sleep -Seconds 90
+          
+          # 终止主进程及其所有子进程
+          Write-Host "Stopping the process tree..."
+          Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          
+          # 额外清理可能遗留的 node 或 electron 进程（避免文件锁定）
+          Get-Process -Name "node","electron" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+          
+          Write-Host "Execution stopped after 60 seconds."
 
+      # ========== 新增：完整执行 npm run make（确保所有构建依赖下载完成） ==========
+      - name: Run npm make
+        run: npm run make
+        # 可根据需要增加超时时间（默认 360 分钟足够）
+        # timeout-minutes: 30
+
+      # ========== 打包整个项目（包括 node_modules、.cache 以及 make 生成的产物） ==========
       - name: Prepare archive
         shell: pwsh
         run: |
+          # 将项目所有文件（包括 node_modules 和 .cache）打包
+          # 注意排除 .git 目录以减少体积
+          $exclude = @('*.git', '*.github')   # 可根据需要调整
+          $source = '.'
           $destination = 'dyad-offline-bundle.tar.gz'
-          # 打包项目所有文件（包括 node_modules 和 .cache），排除 .git 等无关目录
-          tar -czf $destination --exclude='.git' --exclude='.github' --exclude='*.tar.gz' .
+          # 使用 tar 打包（Windows 10 1803+ 自带 tar 命令）
+          tar -czf $destination --exclude='.git' --exclude='.github' --exclude='*.tar.gz' $source
+          # 验证文件大小
           Get-Item $destination | Select-Object Name, Length
 
       - name: Upload artifact
@@ -53,4 +83,4 @@ jobs:
         with:
           name: dyad-offline-bundle
           path: dyad-offline-bundle.tar.gz
-          retention-days: 7
+          retention-days: 7   # 根据需要保留
