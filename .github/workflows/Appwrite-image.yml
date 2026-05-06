@@ -1,0 +1,26 @@
+name: Export Docker Image
+
+on:
+  workflow_dispatch:   # 手动触发
+
+jobs:
+  export-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pull Docker image
+        run: docker pull appwrite/appwrite:1.9.0
+
+      - name: Save and compress image
+        run: |
+          mkdir -p output
+          docker save appwrite/appwrite:1.9.0 | gzip > output/appwrite-1.9.0.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appwrite-image
+          path: output/appwrite-1.9.0.tar.gz
+          retention-days: 1   # 只保留1天，节省存储
