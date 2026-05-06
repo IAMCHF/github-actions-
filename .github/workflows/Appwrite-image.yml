@@ -1,4 +1,4 @@
-name: Export Docker Image
+name: Export Appwrite Image
 
 on:
   workflow_dispatch:   # 手动触发
