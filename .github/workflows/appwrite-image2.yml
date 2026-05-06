@@ -1,0 +1,33 @@
+name: Export Appwrite install Images
+
+on:
+  workflow_dispatch:   # 手动触发
+
+jobs:
+  export-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pull Docker images
+        run: |
+          docker pull appwrite/console:7.8.26
+          docker pull appwrite/browser:0.3.2
+          docker pull openruntimes/executor:0.7.22
+
+      - name: Save and compress all images
+        run: |
+          mkdir -p output
+          docker save \
+            appwrite/console:7.8.26 \
+            appwrite/browser:0.3.2 \
+            openruntimes/executor:0.7.22 \
+            | gzip > output/missing-images.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: missing-images-bundle
+          path: output/missing-images.tar.gz
+          retention-days: 1  # 按需调整，最长90天
