@@ -1,0 +1,26 @@
+name: Export AIO Sandbox Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  export-sandbox:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Pull sandbox image
+        run: docker pull ghcr.io/agent-infra/sandbox:latest
+
+      - name: Save and compress
+        run: |
+          mkdir -p output
+          docker save ghcr.io/agent-infra/sandbox:latest | gzip > output/sandbox-latest.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aio-sandbox-image
+          path: output/sandbox-latest.tar.gz
+          retention-days: 1
